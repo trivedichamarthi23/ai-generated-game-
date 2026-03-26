@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react';
 
 type Point = { x: number; y: number };
 type Blast = { x: number; y: number; id: string };
@@ -13,12 +13,28 @@ export default function SnakeGame() {
   const [score, setScore] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [blasts, setBlasts] = useState<Blast[]>([]);
+  const [hasStarted, setHasStarted] = useState(false);
 
   const directionRef = useRef<Point>({ x: 0, y: -1 });
   const lastProcessedDirectionRef = useRef<Point>({ x: 0, y: -1 });
   const touchStartRef = useRef<Point | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Handle audio playback based on game state
+  useEffect(() => {
+    if (audioRef.current && hasStarted) {
+      if (isPaused || gameOver) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play().catch(() => {
+          // Ignore autoplay errors if user hasn't interacted yet
+        });
+      }
+    }
+  }, [isPaused, gameOver, hasStarted]);
 
   const changeDirection = useCallback((dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
+    if (!hasStarted) setHasStarted(true);
     const { x, y } = lastProcessedDirectionRef.current;
     switch (dir) {
       case 'UP':
@@ -92,8 +108,14 @@ export default function SnakeGame() {
     setScore(0);
     setGameOver(false);
     setIsPaused(false);
+    setHasStarted(false);
     setBlasts([]);
     setFood(generateFood(initialSnake));
+    
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.pause();
+    }
   };
 
   const moveSnake = useCallback(() => {
@@ -148,6 +170,7 @@ export default function SnakeGame() {
           changeDirection('RIGHT');
           break;
         case ' ':
+          if (!hasStarted) setHasStarted(true);
           setIsPaused(p => !p);
           break;
       }
@@ -157,12 +180,21 @@ export default function SnakeGame() {
   }, [changeDirection]);
 
   useEffect(() => {
+    if (!hasStarted) return;
     const interval = setInterval(moveSnake, TICK_RATE);
     return () => clearInterval(interval);
-  }, [moveSnake]);
+  }, [moveSnake, hasStarted]);
 
   return (
     <div className="w-full max-w-md flex flex-col gap-4">
+      {/* Background Music - Dude Telugu OST */}
+      <audio 
+        ref={audioRef} 
+        loop 
+        src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" 
+        title="Dude Telugu OST"
+      />
+
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div className="flex flex-col">
           <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Score</span>
@@ -170,6 +202,18 @@ export default function SnakeGame() {
         </div>
         <div className="flex gap-3 items-center">
           {isPaused && !gameOver && <span className="text-amber-600 bg-amber-50 font-semibold tracking-wide uppercase text-xs px-2.5 py-1 rounded-md border border-amber-200">Paused</span>}
+          
+          <button 
+            onClick={() => {
+              if (!hasStarted) setHasStarted(true);
+              setIsPaused(!isPaused);
+            }} 
+            className="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors shadow-sm cursor-pointer"
+            title={isPaused ? "Play" : "Pause"}
+          >
+            {isPaused || !hasStarted ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+          </button>
+
           <button onClick={resetGame} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-semibold shadow-sm cursor-pointer">
             Restart
           </button>
@@ -186,6 +230,18 @@ export default function SnakeGame() {
           backgroundImage: `conic-gradient(#aad751 90deg, transparent 90deg 180deg, #aad751 180deg 270deg, transparent 270deg)`,
           backgroundSize: `${200/GRID_SIZE}% ${200/GRID_SIZE}%`,
         }}></div>
+
+        {!hasStarted && !gameOver && (
+          <div className="absolute inset-0 z-30 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center">
+            <button 
+              onClick={() => setHasStarted(true)} 
+              className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xl transition-transform hover:scale-105 shadow-lg cursor-pointer flex items-center gap-2"
+            >
+              <Play className="w-6 h-6 fill-current" /> Start Game
+            </button>
+            <p className="text-white/80 mt-4 font-medium">Use arrow keys or swipe to move</p>
+          </div>
+        )}
 
         {gameOver && (
           <div className="absolute inset-0 z-30 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center">
